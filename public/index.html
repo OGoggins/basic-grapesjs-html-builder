@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GrapesJS Project</title>
+    <link
+      href="https://unpkg.com/grapesjs/dist/css/grapes.min.css"
+      rel="stylesheet"
+    />
+    <link href="index.css" rel="stylesheet" />
+    <script src="https://unpkg.com/grapesjs"></script>
+    <script src="https://unpkg.com/grapesjs-blocks-basic"></script>
+  </head>
+  <body>
+    <div id="gjs" style="height: 90vh;"></div>
+    <button
+      id="save-btn"
+      class="button"
+      style="position: fixed; bottom: 10px; right: 10px; z-index: 1000;"
+      onclick="showDownloadOptions()"
+    >
+      export
+    </button>
+    <!-- 
+    <button class="button" onclick="(importHTML(), importCSS())">
+      Import HTML
+    </button> -->
+
+    <div id="download-options" class="container" style="display: none;">
+      <button class="button" onclick="downloadFormattedCSS(editor.getCss())">
+        Download CSS
+      </button>
+      <button class="button" onclick="downloadCompleteHTML(editor.getHtml())">
+        Download HTML
+      </button>
+      <button class="button" onclick="closeDownloadOptions()">
+        Close
+      </button>
+    </div>
+
+    <script>
+      function showDownloadOptions() {
+        document.getElementById("download-options").style.display = "block";
+      }
+
+      function downloadFormattedCSS(cssContent) {
+        fetch("/cssDownload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            css: editor.getCss(),
+          }),
+        })
+          .then((response) => response.blob())
+          .then((blob) => {
+            const url = window.URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "style.css";
+            document.body.appendChild(a);
+            a.click();
+
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+          });
+      }
+
+      function downloadCompleteHTML(htmlSnippet) {
+        fetch("/htmlDownload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            html: editor.getHtml(),
+          }),
+        })
+          .then((response) => response.blob())
+          .then((blob) => {
+            const url = window.URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "index.html";
+            document.body.appendChild(a);
+            a.click();
+
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+          });
+      }
+      function closeDownloadOptions() {
+        document.getElementById("download-options").style.display = "none";
+      }
+    </script>
+    <script>
+      const editor = grapesjs.init({
+        container: "#gjs",
+        fromElement: true,
+        height: "100vh",
+        storageManager: false,
+        plugins: ["gjs-blocks-basic"],
+        pluginsOpts: {
+          "gjs-blocks-basic": {},
+        },
+      });
+
+      function importHTML() {
+        const html = prompt("Paste your HTML here");
+        editor.setComponents(html);
+      }
+
+      function importCSS() {
+        const css = prompt("Paste your CSS here");
+        editor.setStyle(css);
+        importCssToBlocks(css);
+      }
+
+      function importCssToBlocks(cssString) {
+        // Remove CSS comments
+        const cssWithoutComments = cssString.replace(/\/\*[\s\S]*?\*\//g, "");
+
+        // Split the string into blocks based on the closing brace
+        const cssBlocks = cssWithoutComments
+          .split("}")
+          .filter((text) => text.trim().length);
+
+        // Iterate over each block and add it to GrapesJS
+        cssBlocks.forEach((block, index) => {
+          // Extract selector and cssText
+          const [selector, cssText] = block
+            .split("{")
+            .map((text) => text.trim());
+          // Split cssText into an array of css properties
+          const cssPropertiesArray = cssText
+            .split(";")
+            .filter((prop) => prop.trim().length);
+
+          // Convert array of css properties into a JSON object
+          const styleObject = cssPropertiesArray.reduce((styleObj, prop) => {
+            const [property, value] = prop
+              .split(":")
+              .map((item) => item.trim());
+            if (property && value) {
+              // Convert property to camelCase for JSON object
+              const jsonProperty = property.replace(/-\w/g, (match) =>
+                match[1].toUpperCase()
+              );
+              styleObj[jsonProperty] = value;
+            }
+            return styleObj;
+          }, {});
+          console.log(styleObject);
+          // Check if selector or cssText is not empty
+          if (selector && Object.keys(styleObject).length > 0) {
+            // Add the block to the editor
+            editor.BlockManager.add(`css-block-${index}`, {
+              category: "Imported Blocks",
+              label: selector,
+              content: {
+                tagName: "div",
+                style: styleObject, // Set the style as a JSON object
+                type: "default", // or the appropriate type for your content
+                classes: [selector],
+              },
+              attributes: { class: "fa fa-css3" },
+            });
+          }
+        });
+      }
+    </script>
+  </body>
+</html>
